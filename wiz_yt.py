@@ -102,8 +102,16 @@ async def ensure_paired(api: YtLoungeApi) -> None:
         "  It shows a code like '123 456 789 012'.\n"
     )
     code = input("Enter the TV code: ").strip().replace(" ", "")
-    if not await api.pair(code):
-        sys.exit("Pairing failed. Double-check the code and try again.")
+    try:
+        ok = await api.pair(code)
+    except Exception:
+        ok = False
+    if not ok:
+        sys.exit(
+            "\nThat code didn't work. These TV codes expire after a few minutes —\n"
+            "reopen YouTube > Settings > 'Link with TV code' on the TV and enter\n"
+            "the CURRENT code (it will have changed)."
+        )
     # Note: use auth.serialize() (not store_auth_state()) — it's the format
     # load_auth_state() expects; the two are mismatched in pyytlounge.
     with open(AUTH_FILE, "w") as f:
