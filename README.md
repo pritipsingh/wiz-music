@@ -1,17 +1,23 @@
 # 🎵💡 wiz-music
 
-**Make your WiZ smart bulbs take on the color of whatever music you're playing.**
+**Make your WiZ smart bulbs take on the color of whatever you're playing.**
 
-Play a song on Spotify or YouTube, and your lights melt into the colors of the
-album art — in real time. No cloud services, no lag: your Mac reads what's
-playing, pulls the dominant colors from the cover art, and beams them straight
-to your bulbs over your local WiFi.
+Two ways to light your room to your music, both streaming colors to your bulbs
+locally over your WiFi — no cloud services, no lag:
 
-> Album art → dominant colors → your room. The song is *there*, in the light.
+| Mode | Script | What it follows | Best for |
+|---|---|---|---|
+| 🎨 **Album art** | `wiz_music.py` | The cover art of the track playing on your Mac | Spotify / YouTube on your Mac |
+| 📺 **Ambient (Ambilight)** | `wiz_ambient.py` | The live colors on a screen, via a webcam | YouTube/Netflix/games on a **TV** |
+
+> Album art → dominant colors → your room. Or a screen → your room. The song is
+> *there*, in the light.
 
 ---
 
-## How it works
+## Mode 1 — Album art (`wiz_music.py`)
+
+Play a song on your Mac and the lights melt into the colors of the album cover.
 
 ```
  ┌─────────────┐    now playing    ┌──────────────┐   dominant     ┌──────────┐
@@ -21,30 +27,52 @@ to your bulbs over your local WiFi.
 ```
 
 1. **Read what's playing.** macOS keeps a system-wide "Now Playing" record (the
-   thing in Control Center). It captures metadata *and album artwork* from both
-   the **Spotify app** and **YouTube in a browser** — so one source covers both.
+   thing in Control Center) with metadata *and album artwork* from both the
+   **Spotify app** and **YouTube in a browser** — one source covers both.
 2. **Extract the palette.** The cover art is run through a dominant-color
-   extractor, and the colors are saturation-boosted so they actually pop on a
-   bulb instead of looking muddy.
-3. **Push to the bulbs — locally.** WiZ bulbs are controlled with small UDP
-   packets over your own network (port `38899`). The script and the bulbs sit on
-   the **same LAN**, so it's instant — no internet round-trip, no cloud account.
+   extractor ([Modified Median Cut Quantization](https://en.wikipedia.org/wiki/Median_cut)),
+   then saturation-boosted so it pops on a bulb instead of looking muddy.
+3. **Push to the bulbs — locally.** WiZ bulbs take JSON `setPilot` commands as
+   UDP packets on port `38899`. Script and bulbs share the **same LAN**, so it's
+   instant — no internet round-trip, no account.
 
-Multiple bulbs each get a different color from the cover's palette, and the
-lights only change when the track changes — calm, not flickery.
+> ⚠️ This reads *this Mac's* playback. Music on a phone or TV won't be seen — for
+> a TV, use Mode 2.
+
+## Mode 2 — Ambient / Ambilight (`wiz_ambient.py`)
+
+Point a **webcam at your TV** and the bulbs follow the colors on screen in real
+time. Since it watches the *picture*, it works with anything — YouTube on a
+smart TV, Netflix, games — with no metadata or API.
+
+```
+┌──────────┐   points at    ┌─────────────┐  dominant     ┌──────────┐
+│   TV      │ ◀──────────── │  webcam +    │  color 🎨     │   WiZ    │
+│ (YouTube) │                │  your Mac    │ ────────────▶ │  bulbs   │
+└──────────┘                └─────────────┘   UDP / LAN     └──────────┘
+```
+
+The frame is clustered with k-means to find its dominant color (biased toward
+colorful regions so black bars don't win), smoothed over time so the light
+glides instead of strobing, then sent to the bulbs — reusing the exact same
+local WiZ control code as Mode 1.
+
+> Point the camera so the TV fills as much of the frame as possible. For the
+> cleanest result, an HDMI-capture setup beats a webcam — but that only works if
+> an external stick (Chromecast/Apple TV) feeds the TV, not the TV's own app.
 
 ---
 
 ## Setup
 
-**Requirements:** macOS (≤ 14.x recommended), Python 3.9+, and WiZ bulbs on the
-same WiFi as your Mac.
+**Requirements:** macOS (≤ 14.x recommended), Python 3.9+, WiZ bulbs on the same
+WiFi as your Mac. Mode 2 also needs a webcam.
 
 ```bash
-# 1. The macOS "now playing" reader
+# The macOS "now playing" reader (Mode 1 only)
 brew install nowplaying-cli
 
-# 2. Python deps (in a virtualenv)
+# Python deps (in a virtualenv)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -54,16 +82,16 @@ pip install -r requirements.txt
 
 ```bash
 source .venv/bin/activate
-python wiz_music.py
+
+python wiz_music.py      # Mode 1: album art from Mac playback
+python wiz_ambient.py    # Mode 2: ambient color from a webcam
 ```
 
-Hit play on Spotify or YouTube. When the track changes, the bulbs update to
-match the cover art. `Ctrl-C` to stop.
+Both auto-discover your bulbs on the LAN and print live color swatches as they
+run. `Ctrl-C` to stop.
 
 ```
 Found 2 bulb(s): 192.168.1.18, 192.168.1.14
-Watching what's playing. Press Ctrl-C to stop.
-
 ♪ Rahat Fateh Ali Khan — Laal Ishq
   ██  ██   [(196, 38, 42), (28, 20, 34)]
 ```
@@ -72,37 +100,52 @@ Watching what's playing. Press Ctrl-C to stop.
 
 ## Tuning
 
-All the knobs live at the top of [`wiz_music.py`](wiz_music.py):
+Shared bulb + color settings live in [`wiz_bulbs.py`](wiz_bulbs.py):
 
 | Setting | What it does |
 |---|---|
 | `BULB_IPS` | Leave empty to auto-discover, or hardcode IPs for reliability. |
-| `SATURATION_BOOST` | Higher = more vivid (album colors are often muddy). |
-| `MIN_BRIGHTNESS` / `MAX_BRIGHTNESS` | Keep dark covers from going near-black. |
-| `POLL_SECONDS` | How often to check what's playing. |
+| `SATURATION_BOOST` | Higher = more vivid (colors are often muddy). |
+| `MIN_VALUE` | Brightness floor so dark scenes don't go black. |
+| `BRIGHTNESS` | Bulb brightness, 0-255. |
+
+Ambient mode adds its own knobs at the top of [`wiz_ambient.py`](wiz_ambient.py):
+`CAMERA_INDEX`, `CROP` (zoom into the TV), `SMOOTHING` (dreamy ↔ snappy),
+`SEND_INTERVAL`.
 
 **Bulbs not found?** Auto-discovery can be flaky on some routers. Open the WiZ
 app → each bulb's settings shows its IP → paste them into `BULB_IPS`.
 
 ---
 
+## The WiZ protocol (nerdy bit)
+
+No cloud, no pairing handshake. WiZ bulbs listen for **JSON over UDP** on port
+`38899`. Setting a color is a single packet:
+
+```json
+{"method": "setPilot", "params": {"r": 196, "g": 38, "b": 42, "dimming": 100}}
+```
+
+The bulb applies it instantly and replies `{"result": {"success": true}}`.
+Discovery is the same packet broadcast to the whole subnet. `pywizlight` builds
+these for us so the code just calls `.turn_on(rgb=...)`.
+
+---
+
 ## Notes & limitations
 
-- **Playback has to be on this Mac.** The script reads *this* machine's Now
-  Playing, so playing on your phone won't be seen. (A Spotify Web API version
-  that works from any device is on the roadmap below.)
-- **macOS 15.4+** locked down the Now Playing API for third-party tools. If you
-  upgrade and it stops seeing tracks, that's why.
-- This matches the **cover-art color** (static per track). Beat-reactive pulsing
-  is a separate audio-capture mode.
+- **Mode 1** needs playback on *this* Mac; **macOS 15.4+** locked down the Now
+  Playing API for third-party tools, so it works best on 14.x and earlier.
+- **Mode 2** (webcam) is affected by room lighting and camera angle — aim it so
+  the TV fills the frame, and dim other lights for the cleanest read.
 
 ## Roadmap ideas
 
-- [ ] **Spotify Web API mode** — read playback from the cloud so you can play on
-      any device (phone included), not just this Mac.
-- [ ] **Audio-reactive mode** — capture system audio and pulse the lights to the
-      beat, for any source.
-- [ ] Smooth color fades / transitions between tracks.
+- [x] **Ambient / Ambilight mode** — sync to any screen via a webcam.
+- [ ] **Spotify Web API mode** — read playback from the cloud so any device
+      (phone, TV's Spotify app) works, not just this Mac.
+- [ ] **Audio-reactive mode** — capture system audio and pulse to the beat.
 - [ ] Run headless on a Raspberry Pi for an always-on setup.
 
 ---
@@ -111,7 +154,8 @@ app → each bulb's settings shows its IP → paste them into `BULB_IPS`.
 
 - [`pywizlight`](https://github.com/sbidy/pywizlight) — local control of WiZ bulbs
 - [`nowplaying-cli`](https://github.com/kirtan-shah/nowplaying-cli) — macOS Now Playing reader
-- [`colorthief`](https://github.com/fengsp/color-thief-py) — dominant color extraction
+- [`colorthief`](https://github.com/fengsp/color-thief-py) — album-art color extraction
+- [`opencv-python`](https://github.com/opencv/opencv-python) — webcam capture + frame color clustering
 
 ## License
 

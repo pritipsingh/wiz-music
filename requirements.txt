@@ -1,3 +1,4 @@
 pywizlight>=0.5.14
 colorthief>=0.2.1
 Pillow>=10.0.0
+opencv-python>=4.8.0
