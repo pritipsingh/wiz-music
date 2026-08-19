@@ -8,7 +8,8 @@ locally over your WiFi — no cloud services, no lag:
 | Mode | Script | What it follows | Best for |
 |---|---|---|---|
 | 🎨 **Album art** | `wiz_music.py` | The cover art of the track playing on your Mac | Spotify / YouTube on your Mac |
-| 📺 **Ambient (Ambilight)** | `wiz_ambient.py` | The live colors on a screen, via a webcam | YouTube/Netflix/games on a **TV** |
+| 📺 **YouTube on TV** | `wiz_yt.py` | The video playing on your TV's YouTube app | YouTube on a **smart TV**, no camera |
+| 🎥 **Ambient (Ambilight)** | `wiz_ambient.py` | The live colors on a screen, via a webcam | Netflix/games on a TV, any screen |
 
 > Album art → dominant colors → your room. Or a screen → your room. The song is
 > *there*, in the light.
@@ -39,7 +40,34 @@ Play a song on your Mac and the lights melt into the colors of the album cover.
 > ⚠️ This reads *this Mac's* playback. Music on a phone or TV won't be seen — for
 > a TV, use Mode 2.
 
-## Mode 2 — Ambient / Ambilight (`wiz_ambient.py`)
+## Mode 2 — YouTube on a TV (`wiz_yt.py`)
+
+Play YouTube on your smart TV and the bulbs follow the video — **no camera**.
+It talks to the TV's YouTube app directly over your WiFi using YouTube's
+"Lounge" API (the same thing that lets your phone be a remote — "Play on TV").
+
+```
+┌──────────┐  now playing   ┌──────────────┐  video thumb   ┌──────────┐
+│ TV's YT   │ ────────────▶ │   wiz_yt      │  → colors 🎨   │   WiZ    │
+│   app     │  (Lounge API)  │  (your Mac)   │ ────────────▶ │  bulbs   │
+└──────────┘                 └──────────────┘   UDP / LAN     └──────────┘
+```
+
+1. **Pair once.** On the TV: YouTube → Settings → *Link with TV code*. Enter the
+   code when the script asks. It's saved (`.yt_auth.json`), so you never re-pair.
+2. **Get live now-playing.** The TV pushes events — the current **video id** and
+   play/pause — straight to your Mac.
+3. **Color from the thumbnail.** The video's thumbnail is fetched, run through
+   the same dominant-color extractor as Mode 1, and streamed to the bulbs.
+
+```bash
+python wiz_yt.py
+```
+
+> Colors come from the video **thumbnail** (one identity color per video), not
+> per-scene — for that, use Mode 3. But it needs no camera and no cloud.
+
+## Mode 3 — Ambient / Ambilight (`wiz_ambient.py`)
 
 Point a **webcam at your TV** and the bulbs follow the colors on screen in real
 time. Since it watches the *picture*, it works with anything — YouTube on a
@@ -84,7 +112,8 @@ pip install -r requirements.txt
 source .venv/bin/activate
 
 python wiz_music.py      # Mode 1: album art from Mac playback
-python wiz_ambient.py    # Mode 2: ambient color from a webcam
+python wiz_yt.py         # Mode 2: YouTube on a TV (no camera)
+python wiz_ambient.py    # Mode 3: ambient color from a webcam
 ```
 
 Both auto-discover your bulbs on the LAN and print live color swatches as they
@@ -142,9 +171,12 @@ these for us so the code just calls `.turn_on(rgb=...)`.
 
 ## Roadmap ideas
 
+- [x] **YouTube-on-TV mode** — read now-playing from the TV via the Lounge API.
 - [x] **Ambient / Ambilight mode** — sync to any screen via a webcam.
 - [ ] **Spotify Web API mode** — read playback from the cloud so any device
       (phone, TV's Spotify app) works, not just this Mac.
+- [ ] **Scene-reactive YouTube** — sample the video timeline instead of one
+      thumbnail, so colors shift through the video without a camera.
 - [ ] **Audio-reactive mode** — capture system audio and pulse to the beat.
 - [ ] Run headless on a Raspberry Pi for an always-on setup.
 
@@ -155,6 +187,7 @@ these for us so the code just calls `.turn_on(rgb=...)`.
 - [`pywizlight`](https://github.com/sbidy/pywizlight) — local control of WiZ bulbs
 - [`nowplaying-cli`](https://github.com/kirtan-shah/nowplaying-cli) — macOS Now Playing reader
 - [`colorthief`](https://github.com/fengsp/color-thief-py) — album-art color extraction
+- [`pyytlounge`](https://github.com/FabioGNR/pyytlounge) — YouTube Lounge API (TV now-playing)
 - [`opencv-python`](https://github.com/opencv/opencv-python) — webcam capture + frame color clustering
 
 ## License
