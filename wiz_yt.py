@@ -87,8 +87,11 @@ class ColorListener(EventListener):
 
 async def ensure_paired(api: YtLoungeApi) -> None:
     if os.path.exists(AUTH_FILE):
-        with open(AUTH_FILE) as f:
-            api.load_auth_state(json.load(f))
+        try:
+            with open(AUTH_FILE) as f:
+                api.load_auth_state(json.load(f))
+        except Exception:
+            print("Saved pairing couldn't be read — let's pair again.")
 
     if api.paired():
         return
@@ -101,8 +104,10 @@ async def ensure_paired(api: YtLoungeApi) -> None:
     code = input("Enter the TV code: ").strip().replace(" ", "")
     if not await api.pair(code):
         sys.exit("Pairing failed. Double-check the code and try again.")
+    # Note: use auth.serialize() (not store_auth_state()) — it's the format
+    # load_auth_state() expects; the two are mismatched in pyytlounge.
     with open(AUTH_FILE, "w") as f:
-        json.dump(api.store_auth_state(), f)
+        json.dump(api.auth.serialize(), f)
     print("Paired and saved — you won't need the code next time.\n")
 
 
@@ -115,8 +120,9 @@ async def main():
 
     async with aiohttp.ClientSession() as session:
         listener = ColorListener(bulbs, session)
-        api = YtLoungeApi(DEVICE_NAME, event_listener=listener)
-        try:
+        # YtLoungeApi must be used as an async context manager so it can set up
+        # its own HTTP session.
+        async with YtLoungeApi(DEVICE_NAME, event_listener=listener) as api:
             await ensure_paired(api)
 
             if not await api.connect():
@@ -129,8 +135,6 @@ async def main():
             print("Connected. Play something on the TV's YouTube. Ctrl-C to stop.\n")
             await api.get_now_playing()   # color the current video immediately
             await api.subscribe()          # blocks, feeding events to the listener
-        finally:
-            await api.close()
 
 
 if __name__ == "__main__":
