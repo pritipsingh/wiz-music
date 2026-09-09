@@ -6,5 +6,9 @@ __pycache__/
 # macOS
 .DS_Store
 
+# Swift build output
+MenuBarApp/.build/
+dist/
+
 # YouTube Lounge pairing token (do not commit)
 .yt_auth.json
