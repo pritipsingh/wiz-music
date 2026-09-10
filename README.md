@@ -116,18 +116,6 @@ python wiz_yt.py         # Mode 2: YouTube on a TV (no camera)
 python wiz_ambient.py    # Mode 3: ambient color from a webcam
 ```
 
-### macOS menu bar controller
-
-Build a small native app for manual color, brightness, and power control:
-
-```bash
-./build_menubar_app.sh
-open "dist/WiZ Light.app"
-```
-
-The app starts with the last discovered bulb address. Change the address in
-the popover if your router assigns the bulb a new IP.
-
 Both auto-discover your bulbs on the LAN and print live color swatches as they
 run. `Ctrl-C` to stop.
 
